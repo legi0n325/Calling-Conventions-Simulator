@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calling Conventions Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .stack-item {
+            padding: 0.5rem;
+            border-radius: 0.375rem; 
+            margin-right: 0.5rem; 
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: white;
+            position: relative;
+            transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center;
+            min-width: 115px; 
+            height: 70px; 
+            text-align: center;
+            border: 1px solid rgba(0,0,0,0.1);
+            white-space: normal;
+            word-break: break-word; 
+            overflow: hidden; 
+        }
+        .stack-item span { display: block; width: 100%; line-height: 1.2; } 
+        .stack-item span.address { font-size: 0.65rem; opacity: 0.75; margin-bottom: 0.1rem;}
+        .stack-item span.description { font-weight: 600; font-size: 0.7rem; }
+        .stack-item span.value { font-size: 0.65rem; opacity: 0.9; }
+
+        .stack-item-parameter { background-color: #3b82f6; } 
+        .stack-item-return_address { background-color: #f59e0b; } 
+        .stack-item-saved_rbp { background-color: #16a34a; } 
+        .stack-item-generic { background-color: #6b7280; } 
+        .stack-item-pushed { background-color: #ef4444; } 
+
+         .stack-item.top-of-stack {
+             outline: 3px solid #facc15; 
+             outline-offset: 2px;
+         }
+
+        .stack-visual-container {
+            width: 100%; 
+            min-height: 120px;
+            background-color: #e5e7eb; 
+            border: 1px solid #d1d5db; 
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            position: relative;
+            overflow-x: auto;
+            overflow-y: hidden;
+            margin-top: 1rem; 
+        }
+
+        .stack-visual-container::-webkit-scrollbar { height: 8px; } 
+        .stack-visual-container::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+        .stack-visual-container::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        .stack-visual-container::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        .button-layout-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding-bottom: 1rem;
+        }
+        .button-row {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .button-row button, .button-layout-container > button {
+            position: relative;
+            left: auto;
+            top: auto;
+        }
+
+        .register-pointer-draggable-container {
+             position: absolute; 
+             z-index: 500;
+             cursor: grab;
+             user-select: none;
+             display: flex; 
+             flex-direction: column; 
+             align-items: center;
+        }
+        .register-pointer-draggable-container:active {
+            cursor: grabbing;
+            z-index: 1000;
+        }
+        .register-pointer-arrow { 
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top-width: 8px; 
+            border-top-style: solid;
+            margin-top: 2px; 
+        }
+        .register-pointer-text {
+            padding: 0.4rem 0.8rem; 
+            border-radius: 0.375rem;
+            font-size: 0.75rem; 
+            font-weight: 600;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+        #eip-pointer .register-pointer-arrow { border-top-color: #0ea5e9; } 
+        #eip-pointer .register-pointer-text { background-color: #0ea5e9; }
+        #ebp-pointer .register-pointer-arrow { border-top-color: #16a34a; } 
+        #ebp-pointer .register-pointer-text { background-color: #16a34a; }
+        #esp-pointer .register-pointer-arrow { border-top-color: #ef4444; } 
+        #esp-pointer .register-pointer-text { background-color: #ef4444; }
+
+    </style>
+</head>
+<body class="bg-gray-100 font-mono p-4 md:p-8 relative"> 
+    <div id="eip-pointer" class="register-pointer-draggable-container" style="top: 20px; left: 20px;">
+        <div class="register-pointer-text">EIP</div>
+        <div class="register-pointer-arrow"></div>
+    </div>
+    <div id="ebp-pointer" class="register-pointer-draggable-container" style="top: 80px; left: 20px;">
+         <div class="register-pointer-text">EBP</div>
+         <div class="register-pointer-arrow"></div>
+    </div>
+    <div id="esp-pointer" class="register-pointer-draggable-container" style="top: 140px; left: 20px;">
+         <div class="register-pointer-text">ESP</div>
+         <div class="register-pointer-arrow"></div>
+    </div>
+
+    <div class="p-0 md:p-6"> 
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8 tracking-tight">Calling Conventions Simulator</h1>
+
+        <section class="bg-white p-5 rounded-lg border border-gray-200 shadow-md mb-8 max-w-md mx-auto">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700 border-b border-gray-200 pb-2">Controls</h2>
+            <div class="mb-4 space-y-2">
+                 <label for="pushValueInput" class="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Value to Push:</label>
+                 <div class="flex gap-2">
+                     <input type="text" id="pushValueInput" value="" placeholder="" class="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm">
+                     <button id="btnPushValue" class="px-4 py-2 bg-red-500 text-white rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-150 ease-in-out text-sm font-medium">Push</button>
+                 </div>
+            </div>
+            <div class="button-layout-container">
+                <div class="button-row">
+                    <button id="btnPop" class="flex-1 px-4 py-2 bg-purple-500 text-white rounded-md shadow-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out text-sm font-medium">Pop</button>
+                    <button id="btnCall" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out text-sm font-medium">Call</button>
+                </div>
+                <div class="button-row">
+                    <button id="btnRet" class="w-1/2 mx-auto px-4 py-2 bg-yellow-500 text-white rounded-md shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400 transition duration-150 ease-in-out text-sm font-medium">Ret</button>
+                </div>
+            </div>
+             <div class="mt-4 pt-4 border-t border-gray-200">
+               <button id="btnResetSim" class="w-full px-4 py-2 bg-gray-700 text-white rounded-md shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition duration-150 ease-in-out text-sm font-semibold">Reset Simulation</button>
+             </div>
+        </section>
+
+        <div class="mt-8">
+             <h2 class="text-xl font-semibold text-gray-700 mb-2 text-left">Stack</h2> 
+             <div id="stackVisualContainer" class="stack-visual-container">
+                 <div class="text-center text-gray-500 italic p-4 w-full">Stack Empty</div>
+             </div>
+        </div>
+
+    </div>
+
+<script>
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const initialRSP = 0x7FFFFFFFEFF0;
+        const initialRBP = 0x7FFFFFFFEFF0;
+        const initialRIP = "caller_main_start";
+        const nextInstructionAfterCall = "caller_main_after_call";
+
+        let stack = [];
+        let RSP = initialRSP;
+        let RBP = initialRBP;
+        let RIP = initialRIP;
+
+        const stackVisualContainer = document.getElementById('stackVisualContainer');
+
+        const pushValueInput = document.getElementById('pushValueInput');
+        const btnPushValue = document.getElementById('btnPushValue');
+        const btnPop = document.getElementById('btnPop');
+        const btnCall = document.getElementById('btnCall');
+        const btnRet = document.getElementById('btnRet');
+        const btnResetSim = document.getElementById('btnResetSim');
+
+        const eipPointer = document.getElementById('eip-pointer');
+        const ebpPointer = document.getElementById('ebp-pointer');
+        const espPointer = document.getElementById('esp-pointer');
+
+        function initializeState() {
+            stack = [];
+            RSP = initialRSP;
+            RBP = initialRBP;
+            RIP = initialRIP;
+            updateVisuals();
+            eipPointer.style.top = '20px'; eipPointer.style.left = '20px';
+            ebpPointer.style.top = '80px'; ebpPointer.style.left = '20px';
+            espPointer.style.top = '140px'; espPointer.style.left = '20px';
+        }
+
+        function updateVisuals() {
+            stackVisualContainer.innerHTML = '';
+
+            if (stack.length === 0) {
+                stackVisualContainer.innerHTML = '<div class="text-center text-gray-500 italic p-4 w-full">Stack Empty</div>';
+            } else {
+                const reversedStack = [...stack].reverse();
+
+                reversedStack.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    const originalIndex = stack.length - 1 - index;
+                    const itemAddress = RSP + (originalIndex * 8);
+                    const isTopOfStack = (originalIndex === 0);
+
+                    const itemClass = `stack-item stack-item-${item.type || 'generic'} ${isTopOfStack ? 'top-of-stack' : ''}`;
+                    itemDiv.className = itemClass;
+
+                    itemDiv.setAttribute('title', `${item.description} (${item.value}) at 0x${itemAddress.toString(16).toUpperCase()}`);
+
+                    itemDiv.innerHTML = `
+                        <span class="address">0x${itemAddress.toString(16).toUpperCase()}</span>
+                        <span class="description">${item.description}</span>
+                        <span class="value">(${item.value})</span>
+                    `;
+
+                    stackVisualContainer.appendChild(itemDiv);
+                });
+            }
+             stackVisualContainer.scrollLeft = stackVisualContainer.scrollWidth;
+        }
+
+
+        function getItemType(description) {
+            if (description === "Pushed Value") return 'pushed';
+            if (description.includes("Parameter")) return 'parameter';
+            if (description.includes("Return Address")) return 'return_address';
+            if (description.includes("Saved Caller's RBP")) return 'saved_rbp';
+            return 'generic';
+        }
+
+        function pushToStack(value, description) {
+            RSP -= 8;
+            stack.unshift({ value, description, type: getItemType(description) });
+        }
+
+        function popFromStack() {
+            if (stack.length === 0) {
+                alert("Stack is empty! Cannot Pop.");
+                return null;
+            }
+            const item = stack.shift();
+            RSP += 8;
+            return item;
+        }
+
+        const draggablePointers = document.querySelectorAll('.register-pointer-draggable-container');
+        let activeDraggablePointer = null;
+        let pointerInitialX, pointerInitialY;
+
+        draggablePointers.forEach(pointerContainer => {
+            pointerContainer.addEventListener('mousedown', dragPointerStart);
+            pointerContainer.addEventListener('dragstart', (e) => e.preventDefault());
+        });
+
+        document.addEventListener('mouseup', dragPointerEnd);
+        document.addEventListener('mousemove', dragPointer);
+
+        function dragPointerStart(e) {
+            const targetElement = e.target.closest('.register-pointer-draggable-container');
+            if (e.button !== 0 || !targetElement) return;
+
+            activeDraggablePointer = targetElement;
+            pointerInitialX = e.clientX - activeDraggablePointer.getBoundingClientRect().left;
+            pointerInitialY = e.clientY - activeDraggablePointer.getBoundingClientRect().top;
+            activeDraggablePointer.style.cursor = 'grabbing';
+            activeDraggablePointer.style.zIndex = 1000;
+        }
+
+        function dragPointerEnd() {
+             if (activeDraggablePointer) {
+                 activeDraggablePointer.style.cursor = 'grab';
+                 activeDraggablePointer.style.zIndex = 500;
+             }
+            activeDraggablePointer = null;
+        }
+
+        function dragPointer(e) {
+            if (activeDraggablePointer) {
+                e.preventDefault();
+                let newX = e.clientX - pointerInitialX;
+                let newY = e.clientY - pointerInitialY;
+
+                const bodyRect = document.body.getBoundingClientRect();
+                const pointerRect = activeDraggablePointer.getBoundingClientRect();
+
+                if (newX < 0) newX = 0;
+                if (newY < 0) newY = 0;
+                if (newX + pointerRect.width > window.innerWidth) newX = window.innerWidth - pointerRect.width;
+                if (newY + pointerRect.height > window.innerHeight) newY = window.innerHeight - pointerRect.height;
+
+
+                activeDraggablePointer.style.left = `${newX}px`;
+                activeDraggablePointer.style.top = `${newY}px`;
+            }
+        }
+
+        if (!btnPushValue || !btnPop || !btnCall || !btnRet || !btnResetSim || !stackVisualContainer) {
+            console.error("Error: One or more essential DOM elements not found!");
+            if(stackVisualContainer) stackVisualContainer.innerHTML = "<div class='text-red-500 p-4'>Error: Could not find all required buttons or stack container. Check element IDs.</div>";
+            return;
+        }
+
+        pushValueInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault(); 
+                btnPushValue.click(); 
+            }
+        });
+
+        btnPushValue.addEventListener('click', () => {
+            const valueToPush = pushValueInput.value.trim() || "0x0000"; 
+            pushToStack(valueToPush, "Pushed Value");
+            updateVisuals();
+            pushValueInput.value = ''; 
+        });
+
+        btnPop.addEventListener('click', () => {
+            popFromStack();
+            updateVisuals();
+        });
+
+        btnCall.addEventListener('click', () => {
+            pushToStack(nextInstructionAfterCall, "Return Address (RIP)");
+            pushToStack(`0x${RBP.toString(16).toUpperCase()}`, "Saved Caller's RBP");
+            RBP = RSP;
+            RIP = "CalleeFunction_start";
+            updateVisuals();
+        });
+
+        btnRet.addEventListener('click', () => {
+            RSP = RBP; 
+            const poppedOldRbp = popFromStack(); 
+            if (poppedOldRbp && poppedOldRbp.type === 'saved_rbp') {
+                const rbpVal = parseInt(poppedOldRbp.value, 16);
+                RBP = isNaN(rbpVal) ? initialRBP : rbpVal; 
+            } else {
+                 if (poppedOldRbp) RSP -= 8; 
+                 RBP = initialRBP; 
+                 alert("RET (LEAVE part) failed: Item popped was not Saved RBP or stack empty.");
+                 updateVisuals();
+                 return; 
+            }
+
+            const poppedReturnAddr = popFromStack(); 
+            if (poppedReturnAddr && poppedReturnAddr.type === 'return_address') {
+                RIP = poppedReturnAddr.value; 
+            } else {
+                 if (poppedReturnAddr) RSP -= 8; 
+                 RIP = "ERROR_RET_FAILED";
+                 alert("RET (POP RIP part) failed: Item popped was not Return Address or stack empty.");
+            }
+            updateVisuals();
+        });
+
+
+        btnResetSim.addEventListener('click', () => {
+            initializeState();
+        });
+
+        initializeState();
+
+    });
+</script>
+
+</body>
+</html>
